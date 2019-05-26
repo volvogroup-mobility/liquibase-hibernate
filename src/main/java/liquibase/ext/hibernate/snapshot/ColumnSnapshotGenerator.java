@@ -115,8 +115,13 @@ public class ColumnSnapshotGenerator extends HibernateSnapshotGenerator {
 
                 column.setType(dataType);
                 LOG.info("Found column " + column.getName() + " " + column.getType().toString());
-
-                column.setRemarks(hibernateColumn.getComment());
+                Matcher matcher = Pattern.compile("comment\\s'([^']+)'")
+                                         .matcher(hibernateType);
+                if (matcher.find()){
+                    column.setRemarks(matcher.group(1));
+                } else {
+                    column.setRemarks(hibernateColumn.getComment());
+                }
                 if (hibernateColumn.getValue() instanceof SimpleValue) {
                     DataType parseType;
                     if (DataTypeFactory.getInstance().from(dataType, database) instanceof UnknownType) {

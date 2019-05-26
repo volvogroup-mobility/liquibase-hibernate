@@ -70,6 +70,7 @@ public class IndexSnapshotGenerator extends HibernateSnapshotGenerator {
                 while (columnIterator.hasNext()) {
                     org.hibernate.mapping.Column hibernateColumn = columnIterator.next();
                     index.getColumns().add(new Column(hibernateColumn.getName()).setRelation(table));
+                    index.setUnique(hibernateColumn.isUnique());
                 }
                 LOG.info("Found index " + index.getName());
                 table.getIndexes().add(index);
