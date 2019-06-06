@@ -2,6 +2,7 @@ package liquibase.ext.hibernate.snapshot;
 
 import liquibase.diff.compare.DatabaseObjectComparatorFactory;
 import liquibase.exception.DatabaseException;
+import liquibase.ext.hibernate.annotations.LiquibaseForeignKey;
 import liquibase.ext.hibernate.database.HibernateDatabase;
 import liquibase.snapshot.DatabaseSnapshot;
 import liquibase.snapshot.InvalidExampleException;
@@ -9,9 +10,17 @@ import liquibase.structure.DatabaseObject;
 import liquibase.structure.core.ForeignKey;
 import liquibase.structure.core.Table;
 import org.hibernate.boot.spi.MetadataImplementor;
+import org.hibernate.mapping.Column;
+import org.hibernate.mapping.ManyToOne;
+import org.hibernate.mapping.OneToMany;
+import org.hibernate.mapping.PersistentClass;
+import org.hibernate.type.Type;
 
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Field;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.Optional;
 
 public class ForeignKeySnapshotGenerator extends HibernateSnapshotGenerator {
 
@@ -65,8 +74,9 @@ public class ForeignKeySnapshotGenerator extends HibernateSnapshotGenerator {
                             }
                         }
 
-                        fk.setDeferrable(false);
-                        fk.setInitiallyDeferred(false);
+                        LiquibaseForeignKey lfk = resolveLiquibaseForeignKey(metadata, hibernateForeignKey);
+                        fk.setDeferrable(lfk.deferrable());
+                        fk.setInitiallyDeferred(lfk.initiallyDeferred());
 
 //			Index index = new Index();
 //			index.setName("IX_" + fk.getName());
@@ -83,6 +93,75 @@ public class ForeignKeySnapshotGenerator extends HibernateSnapshotGenerator {
                 }
             }
         }
+    }
+
+    private LiquibaseForeignKey resolveLiquibaseForeignKey(MetadataImplementor metadata, org.hibernate.mapping.ForeignKey hibernateForeignKey) {
+        Optional<Class> mappedClass = metadata.getEntityBindings().stream()
+                .filter(a -> a.getTable() == hibernateForeignKey.getTable())
+                .findFirst()
+                .map(PersistentClass::getMappedClass);
+
+        return mappedClass.map(clazz -> {
+            if (hibernateForeignKey.getColumnSpan() == 1) {
+                return resolveLiquibaseForeignKeyFromColumn(hibernateForeignKey, clazz);
+            } else {
+                return resolveLiquibaseForeignKeyFromTable(clazz);
+            }
+
+        }).orElseGet(() -> new LiquibaseForeignKey() {
+            @Override
+            public boolean deferrable() {
+                return false;
+            }
+
+            @Override
+            public boolean initiallyDeferred() {
+                return false;
+            }
+
+            @Override
+            public Class<? extends Annotation> annotationType() {
+                return null;
+            }
+        });
+
+    }
+
+    private LiquibaseForeignKey resolveLiquibaseForeignKeyFromColumn(org.hibernate.mapping.ForeignKey hibernateForeignKey, Class mappedClass) {
+
+        String fieldName = Optional.of(hibernateForeignKey).map(hfk -> {
+            try {
+                return hfk.getColumn(0);
+            } catch (IndexOutOfBoundsException e) {
+                return null;
+            }
+        }).map(column -> {
+            try {
+                return (ManyToOne) column.getValue();
+            } catch (ClassCastException e) {
+                return null;
+            }
+        }).map(ManyToOne::getPropertyName)
+                .orElse(null);
+
+        if (fieldName == null) {
+            return null;
+        }
+
+        return Optional.ofNullable(mappedClass)
+                .map(entityClass -> {
+                    try {
+                        return entityClass.getDeclaredField(fieldName);
+                    } catch (NoSuchFieldException | NullPointerException e) {
+                        return null;
+                    }
+        }).map(c -> c.getAnnotation(LiquibaseForeignKey.class)).orElse(null);
+
+    }
+
+    private LiquibaseForeignKey resolveLiquibaseForeignKeyFromTable(Class mappedClass) {
+        return Optional.ofNullable(mappedClass).map(c -> (LiquibaseForeignKey) c.getAnnotation(LiquibaseForeignKey.class)).orElse(null);
+                // .filter(d -> hibernateForeignKey.getName().equalsIgnoreCase(d.name()))
     }
 
 }
