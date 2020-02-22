@@ -4,13 +4,13 @@
 
 	<groupId>org.liquibase.ext</groupId>
 	<artifactId>liquibase-hibernate5</artifactId>
-	<version>3.7-volvo2</version>
+	<version>3.8-volvo1</version>
 
 	<name>Liquibase Hibernate Integration</name>
 	<description>Liquibase extension for hibernate integration including generating changesets based on changed
         hibernate mapping files
     </description>
-	<url>https://github.com/liquibase/liquibase-hibernate/wiki</url>
+	<url>https://github.com/volvogroup-mobility/liquibase-hibernate/wiki</url>
 
 	<organization>
 		<name>Liquibase.org</name>
@@ -25,45 +25,26 @@
 	</licenses>
 
 	<issueManagement>
-		<url>https://github.com/liquibase/liquibase-hibernate/issues</url>
+		<url>https://github.com/volvogroup-mobility/liquibase-hibernate/issues</url>
 	</issueManagement>
 
    <scm>
-        <connection>scm:git:git@github.com:liquibase/liquibase-hibernate.git</connection>
-        <url>scm:git:https://github.com/liquibase/liquibase-hibernate.git</url>
-        <developerConnection>scm:git:git@github.com:liquibase/liquibase-hibernate.git</developerConnection>
-      <tag>HEAD</tag>
+        <connection>scm:git:git@github.com:volvogroup-mobility/liquibase-hibernate.git</connection>
+        <url>scm:git:https://github.com/volvogroup-mobility/liquibase-hibernate.git</url>
+        <developerConnection>scm:git:git@github.com:volvogroup-mobility/liquibase-hibernate.git</developerConnection>
+      <tag>liquibase-hibernate5-3.8-volvo1</tag>
   </scm>
 
 	<developers>
 		<developer>
-			<id>nvoxland</id>
-			<name>Nathan Voxland</name>
-			<email>nathan.voxland@liquibase.org</email>
+			<id>timothy-volvo</id>
+			<name>Timothy Rundle</name>
+			<email>timothy.rundle@volvo.com</email>
 			<roles>
 				<role>architect</role>
 				<role>developer</role>
 			</roles>
-			<timezone>-6</timezone>
-		</developer>
-        <developer>
-            <id>randomeizer</id>
-            <name>David Peterson</name>
-            <email>david.peterson@servicerocket.com</email>
-            <url>http://www.servicerocket.com/</url>
-            <roles>
-                <role>developer</role>
-            </roles>
-        </developer>
-		<developer>
-			<id>fxbonnet</id>
-			<name>Francois-Xavier Bonnet</name>
-			<email>francois-xavier.bonnet@centraliens.net</email>
-			<organizationUrl>http://www.octo.com/</organizationUrl>
-			<roles>
-				<role>architect</role>
-				<role>developer</role>
-			</roles>
+			<timezone>-5</timezone>
 		</developer>
 	</developers>
 
@@ -254,16 +235,14 @@
 	</build>
 
     <distributionManagement>
-        <repository>
-            <id>sonatype-nexus-staging</id>
-            <name>Sonatype Production Repository</name>
-            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2</url>
-        </repository>
-        <snapshotRepository>
-            <id>sonatype-nexus-snapshots</id>
-            <name>Sontatype Snapshot Repository</name>
-            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
-        </snapshotRepository>
+		<repository>
+			<id>mcoe-java</id>
+			<url>https://pkgs.dev.azure.com/volvogroup/MCoE/_packaging/mcoe-java/maven/v1</url>
+		</repository>
+		<snapshotRepository>
+			<id>mcoe-java</id>
+			<url>https://pkgs.dev.azure.com/volvogroup/MCoE/_packaging/mcoe-java/maven/v1</url>
+		</snapshotRepository>
     </distributionManagement>
 
 	<profiles>
