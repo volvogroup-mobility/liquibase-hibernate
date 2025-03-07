@@ -6,10 +6,14 @@ import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import jakarta.persistence.EnumType;
 import org.hibernate.boot.spi.MetadataImplementor;
 import org.hibernate.dialect.Dialect;
+import org.hibernate.dialect.H2Dialect;
+import org.hibernate.dialect.MySQLDialect;
 import org.hibernate.dialect.PostgreSQLDialect;
 import org.hibernate.id.ExportableColumn;
+import org.hibernate.mapping.BasicValue;
 import org.hibernate.mapping.SimpleValue;
 
 import liquibase.Scope;
@@ -27,9 +31,10 @@ import liquibase.structure.core.Relation;
 import liquibase.structure.core.Table;
 import liquibase.util.SqlUtil;
 import liquibase.util.StringUtil;
+import org.hibernate.type.SqlTypes;
 
 /**
- * Columns are snapshotted along with with Tables in {@link TableSnapshotGenerator} but this class needs to be here to keep the default ColumnSnapshotGenerator from running.
+ * Columns are snapshotted along with Tables in {@link TableSnapshotGenerator} but this class needs to be here to keep the default ColumnSnapshotGenerator from running.
  * Ideally the column logic would be moved out of the TableSnapshotGenerator to better work in situations where the object types to snapshot are being controlled, but that is not the case yet.
  */
 public class ColumnSnapshotGenerator extends HibernateSnapshotGenerator {
@@ -102,14 +107,15 @@ public class ColumnSnapshotGenerator extends HibernateSnapshotGenerator {
             if (hibernateColumn.getName().equalsIgnoreCase(column.getName())) {
 
                 String defaultValue = null;
-                String hibernateType = hibernateColumn.getSqlType(metadata.getTypeConfiguration(), dialect, metadata);
+                String hibernateType = hibernateColumn.getSqlType(metadata);
+
                 Matcher defaultValueMatcher = Pattern.compile("(?i) DEFAULT\\s+(.*)").matcher(hibernateType);
                 if (defaultValueMatcher.find()) {
                     defaultValue = defaultValueMatcher.group(1);
                     hibernateType = hibernateType.replace(defaultValueMatcher.group(0), "");
                 }
 
-                DataType dataType = toDataType(hibernateType, hibernateColumn.getSqlTypeCode());
+                DataType dataType = toDataType(hibernateType, hibernateColumn.getSqlTypeCode(), dialect);
                 if (dataType == null) {
                     throw new DatabaseException("Unable to find column data type for column " + hibernateColumn.getName());
                 }
@@ -130,10 +136,15 @@ public class ColumnSnapshotGenerator extends HibernateSnapshotGenerator {
                         defaultValue = hibernateColumn.getDefaultValue();
                     }
 
-                    column.setDefaultValue(SqlUtil.parseValue(
-                            snapshot.getDatabase(),
-                            defaultValue,
-                            parseType));
+                    if (hibernateColumn.getSqlTypeCode() != null && SqlTypes.isEnumType(hibernateColumn.getSqlTypeCode()) && dialect instanceof H2Dialect) {
+                        Scope.getCurrentScope().getLog(getClass()).info("TGR defaultValue: " + defaultValue);
+                        column.setDefaultValue(defaultValue);
+                    } else {
+                        column.setDefaultValue(SqlUtil.parseValue(
+                                snapshot.getDatabase(),
+                                defaultValue,
+                                parseType));
+                    }
                 } else {
                     column.setDefaultValue(hibernateColumn.getDefaultValue());
                 }
@@ -181,46 +192,54 @@ public class ColumnSnapshotGenerator extends HibernateSnapshotGenerator {
         }
     }
 
-    protected DataType toDataType(String hibernateType, Integer sqlTypeCode) throws DatabaseException {
+    protected DataType toDataType(String hibernateType, Integer sqlTypeCode, Dialect dialect) throws DatabaseException {
         Matcher matcher = pattern.matcher(hibernateType);
         if (!matcher.matches()) {
             return null;
         }
 
-        String typeName = matcher.group(1);
+        DataType dataType;
 
-        // Liquibase seems to use 'with timezone' instead of 'with time zone',
-        // so we remove any 'with time zone' suffixes here.
-        // The corresponding 'with timezone' suffix will then be added below,
-        // because in that case hibernateType also ends with 'with time zone'.
-        if (typeName.toLowerCase().endsWith(SQL_TIMEZONE_SUFFIX)) {
-            typeName = typeName.substring(0, typeName.length() - SQL_TIMEZONE_SUFFIX.length()).stripTrailing();
-        }
-
-        // If hibernateType ends with 'with time zone' we need to add the corresponding
-        // 'with timezone' suffix to the Liquibase type.
-        if (hibernateType.toLowerCase().endsWith(SQL_TIMEZONE_SUFFIX)) {
-            typeName += (" " + LIQUIBASE_TIMEZONE_SUFFIX);
-        }
-
-        DataType dataType = new DataType(typeName);
-        if (matcher.group(3).isEmpty()) {
-            if (!matcher.group(2).isEmpty()) {
-                dataType.setColumnSize(Integer.parseInt(matcher.group(2)));
-            }
+        // Small hack for enums until DataType adds support for them
+        if (sqlTypeCode != null && SqlTypes.isEnumType(sqlTypeCode)
+                && (dialect instanceof H2Dialect || dialect instanceof MySQLDialect)) {
+            dataType = new DataType(hibernateType);
         } else {
-            dataType.setColumnSize(Integer.parseInt(matcher.group(2)));
-            dataType.setDecimalDigits(Integer.parseInt(matcher.group(3)));
-        }
+            String typeName = matcher.group(1);
 
-        String extra = StringUtil.trimToNull(matcher.group(4));
-        if (extra != null) {
-            if (extra.equalsIgnoreCase("char")) {
-                dataType.setColumnSizeUnit(DataType.ColumnSizeUnit.CHAR);
+            // Liquibase seems to use 'with timezone' instead of 'with time zone',
+            // so we remove any 'with time zone' suffixes here.
+            // The corresponding 'with timezone' suffix will then be added below,
+            // because in that case hibernateType also ends with 'with time zone'.
+            if (typeName.toLowerCase().endsWith(SQL_TIMEZONE_SUFFIX)) {
+                typeName = typeName.substring(0, typeName.length() - SQL_TIMEZONE_SUFFIX.length()).stripTrailing();
+            }
+
+            // If hibernateType ends with 'with time zone' we need to add the corresponding
+            // 'with timezone' suffix to the Liquibase type.
+            if (hibernateType.toLowerCase().endsWith(SQL_TIMEZONE_SUFFIX)) {
+                typeName += (" " + LIQUIBASE_TIMEZONE_SUFFIX);
+            }
+
+            dataType = new DataType(typeName);
+            if (matcher.group(3).isEmpty()) {
+                if (!matcher.group(2).isEmpty()) {
+                    dataType.setColumnSize(Integer.parseInt(matcher.group(2)));
+                }
+            } else {
+                dataType.setColumnSize(Integer.parseInt(matcher.group(2)));
+                dataType.setDecimalDigits(Integer.parseInt(matcher.group(3)));
+            }
+
+            String extra = StringUtil.trimToNull(matcher.group(4));
+            if (extra != null) {
+                if (extra.equalsIgnoreCase("char")) {
+                    dataType.setColumnSizeUnit(DataType.ColumnSizeUnit.CHAR);
+                }
             }
         }
 
-        Scope.getCurrentScope().getLog(getClass()).info("Converted column data type - hibernate type: " + hibernateType + ", SQL type: " + sqlTypeCode + ", type name: " + typeName);
+        Scope.getCurrentScope().getLog(getClass()).info("Converted column data type - hibernate type: " + hibernateType + ", SQL type: " + sqlTypeCode + ", type name: " + dataType.getTypeName());
 
         dataType.setDataTypeId(sqlTypeCode);
         return dataType;
