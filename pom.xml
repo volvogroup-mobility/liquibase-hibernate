@@ -10,13 +10,13 @@
 
     <groupId>org.liquibase.ext</groupId>
     <artifactId>liquibase-hibernate6</artifactId>
-    <version>4.31.1-SNAPSHOT</version>
+    <version>4.31.1-volvo1</version>
 
     <name>Liquibase Hibernate Integration</name>
     <description>Liquibase extension for hibernate integration including generating changesets based on changed
         hibernate mapping files
     </description>
-    <url>https://github.com/liquibase/liquibase-hibernate/wiki</url>
+	<url>https://github.com/volvogroup-mobility/liquibase-hibernate/wiki</url>
 
     <organization>
         <name>Liquibase.org</name>
@@ -53,6 +53,16 @@
                 <role>developer</role>
             </roles>
         </developer>
+		<developer>
+			<id>timothy-volvo</id>
+			<name>Timothy Rundle</name>
+			<email>timothy.rundle@volvo.com</email>
+			<roles>
+				<role>architect</role>
+				<role>developer</role>
+			</roles>
+			<timezone>-5</timezone>
+		</developer>
     </developers>
 
     <licenses>
@@ -242,4 +252,15 @@
             </plugin>
         </plugins>
     </build>
+
+    <distributionManagement>
+		<repository>
+			<id>mcoe-java</id>
+			<url>https://pkgs.dev.azure.com/volvogroup/MCoE/_packaging/mcoe-java/maven/v1</url>
+		</repository>
+		<snapshotRepository>
+			<id>mcoe-java</id>
+			<url>https://pkgs.dev.azure.com/volvogroup/MCoE/_packaging/mcoe-java/maven/v1</url>
+		</snapshotRepository>
+    </distributionManagement>
 </project>
