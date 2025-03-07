@@ -1,20 +1,17 @@
 package liquibase.ext.hibernate.snapshot;
 
-import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import jakarta.persistence.EnumType;
 import org.hibernate.boot.spi.MetadataImplementor;
 import org.hibernate.dialect.Dialect;
-import org.hibernate.dialect.H2Dialect;
-import org.hibernate.dialect.MySQLDialect;
 import org.hibernate.dialect.PostgreSQLDialect;
 import org.hibernate.id.ExportableColumn;
-import org.hibernate.mapping.BasicValue;
 import org.hibernate.mapping.SimpleValue;
+import org.hibernate.type.SqlTypes;
 
 import liquibase.Scope;
 import liquibase.datatype.DataTypeFactory;
@@ -31,7 +28,7 @@ import liquibase.structure.core.Relation;
 import liquibase.structure.core.Table;
 import liquibase.util.SqlUtil;
 import liquibase.util.StringUtil;
-import org.hibernate.type.SqlTypes;
+
 
 /**
  * Columns are snapshotted along with Tables in {@link TableSnapshotGenerator} but this class needs to be here to keep the default ColumnSnapshotGenerator from running.
@@ -115,7 +112,7 @@ public class ColumnSnapshotGenerator extends HibernateSnapshotGenerator {
                     hibernateType = hibernateType.replace(defaultValueMatcher.group(0), "");
                 }
 
-                DataType dataType = toDataType(hibernateType, hibernateColumn.getSqlTypeCode(), dialect);
+                DataType dataType = toDataType(hibernateType, hibernateColumn.getSqlTypeCode());
                 if (dataType == null) {
                     throw new DatabaseException("Unable to find column data type for column " + hibernateColumn.getName());
                 }
@@ -124,7 +121,15 @@ public class ColumnSnapshotGenerator extends HibernateSnapshotGenerator {
                 Scope.getCurrentScope().getLog(getClass()).info("Found column " + column.getName() + " " + column.getType().toString());
 
                 column.setRemarks(hibernateColumn.getComment());
-                if (hibernateColumn.getValue() instanceof SimpleValue) {
+
+                // DataTypeFactory.from and SqlUtil.parseValue rely on the database type however,
+                // the liquibase-core does not know about the fake hibernate database so not all conditions
+                // are handled correctly for enums.
+                boolean isEnumType =  Optional.ofNullable(dataType.getDataTypeId())
+                        .map(SqlTypes::isEnumType)
+                        .orElse(false);
+
+                if (!isEnumType && hibernateColumn.getValue() instanceof SimpleValue) {
                     DataType parseType;
                     if (DataTypeFactory.getInstance().from(dataType, database) instanceof UnknownType) {
                         parseType = new DataType(((SimpleValue) hibernateColumn.getValue()).getTypeName());
@@ -136,15 +141,10 @@ public class ColumnSnapshotGenerator extends HibernateSnapshotGenerator {
                         defaultValue = hibernateColumn.getDefaultValue();
                     }
 
-                    if (hibernateColumn.getSqlTypeCode() != null && SqlTypes.isEnumType(hibernateColumn.getSqlTypeCode()) && dialect instanceof H2Dialect) {
-                        Scope.getCurrentScope().getLog(getClass()).info("TGR defaultValue: " + defaultValue);
-                        column.setDefaultValue(defaultValue);
-                    } else {
-                        column.setDefaultValue(SqlUtil.parseValue(
-                                snapshot.getDatabase(),
-                                defaultValue,
-                                parseType));
-                    }
+                    column.setDefaultValue(SqlUtil.parseValue(
+                            snapshot.getDatabase(),
+                            defaultValue,
+                            parseType));
                 } else {
                     column.setDefaultValue(hibernateColumn.getDefaultValue());
                 }
@@ -192,7 +192,7 @@ public class ColumnSnapshotGenerator extends HibernateSnapshotGenerator {
         }
     }
 
-    protected DataType toDataType(String hibernateType, Integer sqlTypeCode, Dialect dialect) throws DatabaseException {
+    protected DataType toDataType(String hibernateType, Integer sqlTypeCode) {
         Matcher matcher = pattern.matcher(hibernateType);
         if (!matcher.matches()) {
             return null;
@@ -201,8 +201,7 @@ public class ColumnSnapshotGenerator extends HibernateSnapshotGenerator {
         DataType dataType;
 
         // Small hack for enums until DataType adds support for them
-        if (sqlTypeCode != null && SqlTypes.isEnumType(sqlTypeCode)
-                && (dialect instanceof H2Dialect || dialect instanceof MySQLDialect)) {
+        if (Optional.ofNullable(sqlTypeCode).map(SqlTypes::isEnumType).orElse(false)) {
             dataType = new DataType(hibernateType);
         } else {
             String typeName = matcher.group(1);
