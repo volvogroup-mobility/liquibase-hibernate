@@ -1,6 +1,7 @@
 package liquibase.ext.hibernate;
 
 import liquibase.Liquibase;
+import liquibase.Scope;
 import liquibase.database.Database;
 import liquibase.database.core.H2Database;
 import liquibase.database.jvm.JdbcConnection;
@@ -36,7 +37,6 @@ import static junit.framework.TestCase.assertEquals;
 import static junit.framework.TestCase.assertTrue;
 
 public class HibernateIntegrationTest {
-    private final static Logger log = LogFactory.getInstance().getLog();
     private static final String HIBERNATE_CONFIG_FILE = "com/example/pojo/Hibernate.cfg.xml";
     private Database database;
     private Connection connection;
@@ -106,12 +106,12 @@ public class HibernateIntegrationTest {
         outChangeLog.write(changeLogString.getBytes("UTF-8"));
         outChangeLog.close();
 
-        log.info("Changelog:\n" + changeLogString);
+        Scope.getCurrentScope().getLog(getClass()).info("Changelog:\n" + changeLogString);
 
-        liquibase = new Liquibase(outFile.toString(), new FileSystemResourceAccessor(), database);
+        liquibase = new Liquibase(outFile.toString(), new FileSystemResourceAccessor(File.listRoots()), database);
         StringWriter stringWriter = new StringWriter();
         liquibase.update((String) null, stringWriter);
-        log.info(stringWriter.toString());
+        Scope.getCurrentScope().getLog(getClass()).info(stringWriter.toString());
         liquibase.update((String) null);
 
         diffResult = liquibase.diff(hibernateDatabase, database, compareControl);
@@ -277,13 +277,13 @@ public class HibernateIntegrationTest {
         Set<Index> unexpectedIndexes = diffResult.getUnexpectedObjects(Index.class);
         for (Iterator<Index> iterator = unexpectedIndexes.iterator(); iterator.hasNext(); ) {
             Index index = iterator.next();
-            if ("DATABASECHANGELOGLOCK".equalsIgnoreCase(index.getTable().getName()) || "DATABASECHANGELOG".equalsIgnoreCase(index.getTable().getName()))
+            if ("DATABASECHANGELOGLOCK".equalsIgnoreCase(index.getRelation().getName()) || "DATABASECHANGELOG".equalsIgnoreCase(index.getRelation().getName()))
                 diffResult.getUnexpectedObjects().remove(index);
         }
         Set<Index> missingIndexes = diffResult.getMissingObjects(Index.class);
         for (Iterator<Index> iterator = missingIndexes.iterator(); iterator.hasNext(); ) {
             Index index = iterator.next();
-            if ("DATABASECHANGELOGLOCK".equalsIgnoreCase(index.getTable().getName()) || "DATABASECHANGELOG".equalsIgnoreCase(index.getTable().getName()))
+            if ("DATABASECHANGELOGLOCK".equalsIgnoreCase(index.getRelation().getName()) || "DATABASECHANGELOG".equalsIgnoreCase(index.getRelation().getName()))
                 diffResult.getMissingObjects().remove(index);
         }
         Set<PrimaryKey> unexpectedPrimaryKeys = diffResult.getUnexpectedObjects(PrimaryKey.class);
@@ -314,7 +314,7 @@ public class HibernateIntegrationTest {
             Difference difference = changedObject.getValue().getDifference("type");
             if (difference != null && difference.getReferenceValue() != null && difference.getComparedValue() != null
                     && difference.getReferenceValue().toString().equals("float") && difference.getComparedValue().toString().startsWith("DOUBLE(64)")) {
-                log.info("Ignoring difference " + changedObject.getKey().toString() + " " + difference.toString());
+                Scope.getCurrentScope().getLog(getClass()).info("Ignoring difference " + changedObject.getKey().toString() + " " + difference.toString());
                 changedObject.getValue().removeDifference(difference.getField());
             }
         }

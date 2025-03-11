@@ -6,7 +6,9 @@ import java.util.Map;
 
 import javax.persistence.spi.PersistenceUnitInfo;
 
+import liquibase.Scope;
 import org.hibernate.cfg.AvailableSettings;
+import org.hibernate.envers.configuration.EnversSettings;
 import org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl;
 import org.hibernate.jpa.boot.spi.Bootstrap;
 import org.springframework.core.io.ClassPathResource;
@@ -70,12 +72,12 @@ public class HibernateSpringPackageDatabase extends JpaPersistenceDatabase {
     @Override
     protected EntityManagerFactoryBuilderImpl createEntityManagerFactoryBuilder() {
         DefaultPersistenceUnitManager internalPersistenceUnitManager = new DefaultPersistenceUnitManager();
-        internalPersistenceUnitManager.setResourceLoader(new DefaultResourceLoader(getHibernateConnection().getResourceAccessor().toClassLoader()));
+        internalPersistenceUnitManager.setResourceLoader(new DefaultResourceLoader(Scope.getCurrentScope().getClassLoader()));
 
         String[] packagesToScan = getHibernateConnection().getPath().split(",");
 
         for (String packageName : packagesToScan) {
-            LOG.info("Found package " + packageName);
+            Scope.getCurrentScope().getLog(getClass()).info("Found package " + packageName);
         }
 
         internalPersistenceUnitManager.setPackagesToScan(packagesToScan);
@@ -94,7 +96,10 @@ public class HibernateSpringPackageDatabase extends JpaPersistenceDatabase {
         map.put(AvailableSettings.PHYSICAL_NAMING_STRATEGY, getHibernateConnection().getProperties().getProperty(AvailableSettings.PHYSICAL_NAMING_STRATEGY));
         map.put(AvailableSettings.IMPLICIT_NAMING_STRATEGY, getHibernateConnection().getProperties().getProperty(AvailableSettings.IMPLICIT_NAMING_STRATEGY));
         map.put(AvailableSettings.SCANNER_DISCOVERY, "");	// disable scanning of all classes and hbm.xml files. Only scan speficied packages
-        
+        map.put(EnversSettings.AUDIT_TABLE_PREFIX,getHibernateConnection().getProperties().getProperty(EnversSettings.AUDIT_TABLE_PREFIX,""));
+        map.put(EnversSettings.AUDIT_TABLE_SUFFIX,getHibernateConnection().getProperties().getProperty(EnversSettings.AUDIT_TABLE_SUFFIX,"_AUD"));
+        map.put(AvailableSettings.USE_NATIONALIZED_CHARACTER_DATA, getProperty(AvailableSettings.USE_NATIONALIZED_CHARACTER_DATA));
+
         EntityManagerFactoryBuilderImpl builder = (EntityManagerFactoryBuilderImpl) Bootstrap.getEntityManagerFactoryBuilder(persistenceUnitInfo, map);
         
         return builder;

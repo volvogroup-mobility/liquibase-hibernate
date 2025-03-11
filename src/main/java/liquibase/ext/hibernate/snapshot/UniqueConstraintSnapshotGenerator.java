@@ -1,5 +1,6 @@
 package liquibase.ext.hibernate.snapshot;
 
+import liquibase.Scope;
 import liquibase.exception.DatabaseException;
 import liquibase.snapshot.DatabaseSnapshot;
 import liquibase.snapshot.InvalidExampleException;
@@ -8,6 +9,7 @@ import liquibase.structure.core.Column;
 import liquibase.structure.core.Index;
 import liquibase.structure.core.Table;
 import liquibase.structure.core.UniqueConstraint;
+import liquibase.util.StringUtil;
 import org.hibernate.HibernateException;
 
 import java.math.BigInteger;
@@ -57,7 +59,7 @@ public class UniqueConstraintSnapshotGenerator extends HibernateSnapshotGenerato
                 Index index = getBackingIndex(uniqueConstraint, hibernateTable, snapshot);
                 uniqueConstraint.setBackingIndex(index);
 
-                LOG.info("Found unique constraint " + uniqueConstraint.toString());
+                Scope.getCurrentScope().getLog(getClass()).info("Found unique constraint " + uniqueConstraint.toString());
                 table.getUniqueConstraints().add(uniqueConstraint);
             }
             Iterator columnIterator = hibernateTable.getColumnIterator();
@@ -73,7 +75,7 @@ public class UniqueConstraintSnapshotGenerator extends HibernateSnapshotGenerato
                     }
                     uniqueConstraint.addColumn(0, new Column(column.getName()).setRelation(table));
                     uniqueConstraint.setName(name);
-                    LOG.info("Found unique constraint " + uniqueConstraint.toString());
+                    Scope.getCurrentScope().getLog(getClass()).info("Found unique constraint " + uniqueConstraint.toString());
                     table.getUniqueConstraints().add(uniqueConstraint);
 
                     Index index = getBackingIndex(uniqueConstraint, hibernateTable, snapshot);
@@ -115,6 +117,11 @@ public class UniqueConstraintSnapshotGenerator extends HibernateSnapshotGenerato
         index.setRelation(uniqueConstraint.getRelation());
         index.setColumns(uniqueConstraint.getColumns());
         index.setUnique(true);
+        if (StringUtil.isNotEmpty(uniqueConstraint.getName())) {
+            index.setName(uniqueConstraint.getName() + "_IX");
+        } else {
+            index.setName(String.format("%s_%s_IX",hibernateTable.getName(), StringUtil.randomIdentifer(4)));
+        }
 
         return index;
     }

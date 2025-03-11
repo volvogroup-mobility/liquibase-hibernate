@@ -1,6 +1,7 @@
 package liquibase.ext.hibernate;
 
 import liquibase.Liquibase;
+import liquibase.Scope;
 import liquibase.database.Database;
 import liquibase.database.core.HsqlDatabase;
 import liquibase.database.jvm.JdbcConnection;
@@ -13,8 +14,6 @@ import liquibase.diff.output.changelog.DiffToChangeLog;
 import liquibase.diff.output.report.DiffToReport;
 import liquibase.ext.hibernate.database.HibernateSpringPackageDatabase;
 import liquibase.ext.hibernate.database.connection.HibernateConnection;
-import liquibase.logging.LogFactory;
-import liquibase.logging.Logger;
 import liquibase.resource.ClassLoaderResourceAccessor;
 import liquibase.resource.FileSystemResourceAccessor;
 import liquibase.structure.DatabaseObject;
@@ -40,7 +39,6 @@ import static junit.framework.TestCase.assertTrue;
 
 public class SpringPackageScanningIntegrationTest {
     private static final String PACKAGES = "com.example.ejb3.auction";
-    private final static Logger log = LogFactory.getInstance().getLog();
     private Database database;
     private Connection connection;
     private CompareControl compareControl;
@@ -93,10 +91,14 @@ public class SpringPackageScanningIntegrationTest {
         Database hibernateDatabase = new HibernateSpringPackageDatabase();
         hibernateDatabase.setDefaultSchemaName("PUBLIC");
         hibernateDatabase.setDefaultCatalogName("TESTDB");
-        hibernateDatabase.setConnection(new JdbcConnection(new HibernateConnection("hibernate:spring:" + PACKAGES + "?dialect=" + HSQLDialect.class.getName(), new ClassLoaderResourceAccessor())));
+        hibernateDatabase.setConnection(new JdbcConnection(new HibernateConnection("hibernate:spring:" + PACKAGES + "?dialect=" + HSQLDialect.class.getName() + "&org.hibernate.envers.audit_table_prefix=zz_", new ClassLoaderResourceAccessor())));
 
         DiffResult diffResult = liquibase.diff(hibernateDatabase, database, compareControl);
-
+        boolean isTablePrefixWithZZ_ = diffResult.getMissingObjects().stream()
+                .filter(e -> e.getName().equals("zz_AuditedItem_AUD"))
+                .findAny()
+                .isPresent();
+        assertTrue(isTablePrefixWithZZ_);
         assertTrue(diffResult.getMissingObjects().size() > 0);
 
         File outFile = File.createTempFile("lb-test", ".xml");
@@ -105,12 +107,12 @@ public class SpringPackageScanningIntegrationTest {
         outChangeLog.write(changeLogString.getBytes("UTF-8"));
         outChangeLog.close();
 
-        log.info("Changelog:\n" + changeLogString);
+        Scope.getCurrentScope().getLog(getClass()).info("Changelog:\n" + changeLogString);
 
-        liquibase = new Liquibase(outFile.toString(), new FileSystemResourceAccessor(), database);
+        liquibase = new Liquibase(outFile.toString(), new FileSystemResourceAccessor(File.listRoots()), database);
         StringWriter stringWriter = new StringWriter();
         liquibase.update((String) null, stringWriter);
-        log.info(stringWriter.toString());
+        Scope.getCurrentScope().getLog(getClass()).info(stringWriter.toString());
         liquibase.update((String) null);
 
         diffResult = liquibase.diff(hibernateDatabase, database, compareControl);
@@ -122,6 +124,7 @@ public class SpringPackageScanningIntegrationTest {
 
         assertEquals(differences, 0, diffResult.getMissingObjects().size());
         assertEquals(differences, 0, diffResult.getUnexpectedObjects().size());
+        assertEquals(differences, 0, diffResult.getChangedObjects(UniqueConstraint.class).size());
 //        assertEquals(differences, 0, diffResult.getChangedObjects().size()); //unimportant differences in schema name and datatypes causing test to fail
 
     }
@@ -339,15 +342,15 @@ public class SpringPackageScanningIntegrationTest {
         Set<Index> unexpectedIndexes = diffResult.getUnexpectedObjects(Index.class);
         for (Iterator<Index> iterator = unexpectedIndexes.iterator(); iterator.hasNext(); ) {
             Index index = iterator.next();
-            if ("DATABASECHANGELOGLOCK".equalsIgnoreCase(index.getTable().getName())
-                    || "DATABASECHANGELOG".equalsIgnoreCase(index.getTable().getName()))
+            if ("DATABASECHANGELOGLOCK".equalsIgnoreCase(index.getRelation().getName())
+                    || "DATABASECHANGELOG".equalsIgnoreCase(index.getRelation().getName()))
                 diffResult.getUnexpectedObjects().remove(index);
         }
         Set<Index> missingIndexes = diffResult.getMissingObjects(Index.class);
         for (Iterator<Index> iterator = missingIndexes.iterator(); iterator.hasNext(); ) {
             Index index = iterator.next();
-            if ("DATABASECHANGELOGLOCK".equalsIgnoreCase(index.getTable().getName())
-                    || "DATABASECHANGELOG".equalsIgnoreCase(index.getTable().getName()))
+            if ("DATABASECHANGELOGLOCK".equalsIgnoreCase(index.getRelation().getName())
+                    || "DATABASECHANGELOG".equalsIgnoreCase(index.getRelation().getName()))
                 diffResult.getMissingObjects().remove(index);
         }
         Set<PrimaryKey> unexpectedPrimaryKeys = diffResult.getUnexpectedObjects(PrimaryKey.class);
@@ -385,7 +388,7 @@ public class SpringPackageScanningIntegrationTest {
                     && difference.getComparedValue() != null
                     && difference.getReferenceValue().toString().equals("float")
                     && difference.getComparedValue().toString().startsWith("DOUBLE(64)")) {
-                log.info("Ignoring difference "
+                Scope.getCurrentScope().getLog(getClass()).info("Ignoring difference "
                         + changedObject.getKey().toString() + " "
                         + difference.toString());
                 changedObject.getValue()
