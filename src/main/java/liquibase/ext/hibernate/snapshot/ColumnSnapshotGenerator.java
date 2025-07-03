@@ -6,6 +6,7 @@ import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import liquibase.snapshot.SnapshotGenerator;
 import org.hibernate.boot.spi.MetadataImplementor;
 import org.hibernate.dialect.Dialect;
 import org.hibernate.dialect.PostgreSQLDialect;
@@ -242,6 +243,11 @@ public class ColumnSnapshotGenerator extends HibernateSnapshotGenerator {
 
         dataType.setDataTypeId(sqlTypeCode);
         return dataType;
+    }
+
+    @Override
+    public Class<? extends SnapshotGenerator>[] replaces() {
+        return new Class[]{liquibase.snapshot.jvm.ColumnSnapshotGenerator.class};
     }
 
 }
